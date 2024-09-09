@@ -9,13 +9,16 @@ const makeRequest = async (method, url, headers, data) => {
     
     try {
         const response = await axios({
-
-        })
+            method,
+            url,
+            headers: headers ? JSON.parse(headers) : undefined,
+            data: data ? JSON.parse(data) : undefined,
+        });
         
     } catch (error) {
-        
+        console.error(`Error: ${error.message}`);
     }
-}
+};
 
 
 program
