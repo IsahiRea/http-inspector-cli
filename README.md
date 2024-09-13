@@ -16,11 +16,14 @@ HTTP Request Inspector is a command-line tool designed for sending and inspectin
     - `npm install -g .`
 
 ### Usage
+Ensure the script is an executable:
+- `chmod +x http_inspector.js`
+
 Run the tool using: 
-- `./http_inspector.js <command> <url> [options]`
+- `./http-inspector.js <command> <url> [options]`
 
 If installed globally, you can simply run: 
-- `http_inspector <command> <url> [options]`
+- `http-inspector <command> <url> [options]`
 
 ### Supported Commands
  - get
