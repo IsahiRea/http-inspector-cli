@@ -1,46 +1,83 @@
 #!/usr/bin/env node
 
-const {program} = require('commander');
 const axios = require('axios');
+const { program } = require('commander');
 const chalk = require('chalk');
+const fs = require('fs');
+const path = require('path');
 
-// Helper function to add query parameters to the URL
+const measureTime = (start) => {
+    const diff = process.hrtime(start);
+    return `${(diff[0] * 1e9 + diff[1]) / 1e6} ms`;
+};
+
+const prettyPrintJSON = (data) => {
+    console.log(chalk.blueBright(JSON.stringify(data, null, 2)));
+};
+
 const buildUrlWithParams = (url, params) => {
     if (!params) return url;
     const queryString = new URLSearchParams(JSON.parse(params)).toString();
     return `${url}?${queryString}`;
 };
 
-// Create a function to handle requests
-const makeRequest = async (method, url, headers, data, queryParams, auth) => {
+const exportToFile = (data, output, format) => {
+    const filePath = path.resolve(output);
     
+    if (format === 'json') {
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        console.log(chalk.greenBright(`Response data saved to ${filePath}`));
+    } else if (format === 'csv') {
+        const headers = Object.keys(data[0]).join(',');
+        const rows = data.map(row => Object.values(row).join(',')).join('\n');
+        fs.writeFileSync(filePath, `${headers}\n${rows}`);
+        console.log(chalk.greenBright(`Response data saved to ${filePath}`));
+    } else {
+        console.error(chalk.redBright('Unsupported file format. Use json or csv.'));
+    }
+};
+
+const makeRequest = async (method, url, headers, data, queryParams, auth, output, format) => {
+    const start = process.hrtime(); // Start the timer
     try {
-        // Build URL with query parameters
         const finalUrl = buildUrlWithParams(url, queryParams);
 
-        const response = await axios({
+        const config = {
             method,
             url: finalUrl,
             headers: headers ? JSON.parse(headers) : undefined,
             data: data ? JSON.parse(data) : undefined,
             auth: auth ? JSON.parse(auth) : undefined,
-        });
+        };
+
+        const response = await axios(config);
+
+        const time = measureTime(start);
 
         console.log(chalk.greenBright(`Status: ${response.status}`));
+        console.log(chalk.greenBright(`Time: ${time}`));
         console.log(chalk.yellow('Headers:'), response.headers);
         console.log(chalk.yellow('Response Data:'));
-        console.log(chalk.blueBright(JSON.stringify(response.data, null, 2)));
-        
+        prettyPrintJSON(response.data);
+
+        if (output) {
+            const exportFormat = format || 'json';
+            exportToFile(response.data, output, exportFormat);
+        }
     } catch (error) {
-        console.error(`Error: ${error.message}`);
+        console.error(chalk.redBright(`Error: ${error.message}`));
+        if (error.response) {
+            console.log(chalk.greenBright(`Status: ${error.response.status}`));
+            prettyPrintJSON(error.response.data);
+        }
     }
 };
 
-
 program
-    .version('1.1.0')
-    .description('HTTP Request Inspector CLI')
+    .version('1.2.0')
+    .description('Extended HTTP Request Inspector CLI with authentication, query params, and file export');
 
+// GET request command
 program
     .command('get <url>')
     .description('Send a GET request to a URL')
@@ -48,49 +85,58 @@ program
     .option('-Q, --queryParams <queryParams>', 'Query parameters in JSON format')
     .option('-A, --auth <auth>', 'Basic authentication credentials in JSON format (e.g. {"username":"user", "password":"pass"})')
     .option('-T, --token <token>', 'Bearer token for authentication')
+    .option('-O, --output <output>', 'File to save the response data (json or csv)')
+    .option('-F, --format <format>', 'Format of the output file (json or csv)')
     .action((url, options) => {
         const headers = options.token ? JSON.stringify({ ...JSON.parse(options.headers || '{}'), Authorization: `Bearer ${options.token}` }) : options.headers;
-        makeRequest('get', url, headers, null, options.queryParams, options.auth);
-    })
+        makeRequest('get', url, headers, null, options.queryParams, options.auth, options.output, options.format);
+    });
 
+// POST request command
 program
     .command('post <url>')
-    .description('Send a POST request to a URL ')
+    .description('Send a POST request to a URL')
     .option('-H, --headers <headers>', 'Custom headers in JSON format')
-    .option('-D, --data <data>', 'Custom data in JSON format')
+    .option('-d, --data <data>', 'Request body in JSON format')
     .option('-Q, --queryParams <queryParams>', 'Query parameters in JSON format')
     .option('-A, --auth <auth>', 'Basic authentication credentials in JSON format (e.g. {"username":"user", "password":"pass"})')
     .option('-T, --token <token>', 'Bearer token for authentication')
+    .option('-O, --output <output>', 'File to save the response data (json or csv)')
+    .option('-F, --format <format>', 'Format of the output file (json or csv)')
     .action((url, options) => {
         const headers = options.token ? JSON.stringify({ ...JSON.parse(options.headers || '{}'), Authorization: `Bearer ${options.token}` }) : options.headers;
-        makeRequest('post', url, headers, options.data, options.queryParams, options.auth);
-    })
+        makeRequest('post', url, headers, options.data, options.queryParams, options.auth, options.output, options.format);
+    });
 
+// PUT request command
 program
     .command('put <url>')
     .description('Send a PUT request to a URL')
     .option('-H, --headers <headers>', 'Custom headers in JSON format')
-    .option('-D, --data <data>', 'Custom data in JSON format')
+    .option('-d, --data <data>', 'Request body in JSON format')
     .option('-Q, --queryParams <queryParams>', 'Query parameters in JSON format')
     .option('-A, --auth <auth>', 'Basic authentication credentials in JSON format (e.g. {"username":"user", "password":"pass"})')
     .option('-T, --token <token>', 'Bearer token for authentication')
+    .option('-O, --output <output>', 'File to save the response data (json or csv)')
+    .option('-F, --format <format>', 'Format of the output file (json or csv)')
     .action((url, options) => {
         const headers = options.token ? JSON.stringify({ ...JSON.parse(options.headers || '{}'), Authorization: `Bearer ${options.token}` }) : options.headers;
-        makeRequest('put', url, headers, options.data, options.queryParams, options.auth);
-    })
-    
+        makeRequest('put', url, headers, options.data, options.queryParams, options.auth, options.output, options.format);
+    });
 
+// DELETE request command
 program
     .command('delete <url>')
-    .description('Send a DELETE request to a URL ')
+    .description('Send a DELETE request to a URL')
     .option('-H, --headers <headers>', 'Custom headers in JSON format')
     .option('-Q, --queryParams <queryParams>', 'Query parameters in JSON format')
     .option('-A, --auth <auth>', 'Basic authentication credentials in JSON format (e.g. {"username":"user", "password":"pass"})')
     .option('-T, --token <token>', 'Bearer token for authentication')
+    .option('-O, --output <output>', 'File to save the response data (json or csv)')
+    .option('-F, --format <format>', 'Format of the output file (json or csv)')
     .action((url, options) => {
         const headers = options.token ? JSON.stringify({ ...JSON.parse(options.headers || '{}'), Authorization: `Bearer ${options.token}` }) : options.headers;
-        makeRequest('delete', url, headers, null, options.queryParams, options.auth);
-    })
+        makeRequest('delete', url, headers, null, options.queryParams, options.auth, options.output, options.format);
+    });
 
-// Parse the CLI arguments
 program.parse(process.argv);
