@@ -21,6 +21,21 @@ const buildUrlWithParams = (url, params) => {
     return `${url}?${queryString}`;
 };
 
+// Flatten nested objects for CSV export
+const flattenObject = (obj, parent = '', res = {}) => {
+    for (const key in obj) {
+        const propName = parent ? `${parent}.${key}` : key;
+        if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+            flattenObject(obj[key], propName, res);
+        } else if (Array.isArray(obj[key])) {
+            res[propName] = JSON.stringify(obj[key]); // Convert arrays to JSON string for CSV compatibility
+        } else {
+            res[propName] = obj[key];
+        }
+    }
+    return res;
+};
+
 const exportToFile = (data, output, format) => {
     const filePath = path.resolve(output);
     
@@ -28,8 +43,16 @@ const exportToFile = (data, output, format) => {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         console.log(chalk.greenBright(`Response data saved to ${filePath}`));
     } else if (format === 'csv') {
-        const headers = Object.keys(data[0]).join(',');
-        const rows = data.map(row => Object.values(row).join(',')).join('\n');
+        
+        if (!Array.isArray(data)) {
+            console.error(chalk.redBright('Error: CSV export requires the response data to be an array of objects.'));
+            return;
+        }
+        
+        // Flatten and convert the data to CSV format
+        const flattenedData = data.map(row => flattenObject(row));
+        const headers = Object.keys(flattenedData[0]).join(',');
+        const rows = flattenedData.map(row => Object.values(row).join(',')).join('\n');
         fs.writeFileSync(filePath, `${headers}\n${rows}`);
         console.log(chalk.greenBright(`Response data saved to ${filePath}`));
     } else {
